@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  # ===========================================
+  # OPSCURE AI PIPELINE API
+  # ===========================================
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+      - PINECONE_API_KEY=${PINECONE_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    depends_on:
+      - ollama
+    networks:
+      - opscure-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ===========================================
+  # OLLAMA (LOCAL LLM)
+  # ===========================================
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - opscure-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  opscure-network:
+    driver: bridge
+
+volumes:
+  ollama-data:
