@@ -95,6 +95,8 @@ class GitConfig(BaseModel):
     """Git user configuration for applying fixes"""
     user_name: str
     user_email: str
+    local_config_content: Optional[str] = None
+    global_config_content: Optional[str] = None
 
 
 # =============================================================================
@@ -123,10 +125,19 @@ class CausalChainStep(BaseModel):
     wait_time_ms: Optional[float] = None
     affected_requests: Optional[int] = None
 
+class FileEdit(BaseModel):
+    """Structured file edit for robust patching"""
+    file_path: str
+    original_context: str
+    replacement_text: str
+    xml_selector: Optional[str] = None
+    xml_value: Optional[str] = None
+
 class ImplementationDetails(BaseModel):
     """Detailed implementation steps for a fix"""
-    type: str  # e.g., "kubectl", "sql", "api"
+    type: str  # e.g., "kubectl", "sql", "api", "git_workflow"
     commands: List[str] = Field(default_factory=list)
+    file_edits: List[FileEdit] = Field(default_factory=list)
     pre_checks: List[str] = Field(default_factory=list)
     post_checks: List[str] = Field(default_factory=list)
 

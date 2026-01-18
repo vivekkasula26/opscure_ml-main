@@ -21,7 +21,9 @@ Rules:
 - Never hallucinate. Only use provided data.
 - Be precise about root cause identification.
 - Recommend specific, actionable fixes.
-- FOR CODE FIXES: Do NOT provide abstract instructions like "Update file X". You MUST provide a "git_workflow" implementation type with exact shell commands (e.g., `git checkout`, `sed`, `git commit`) to apply the fix and create a PR. Include `pre_checks` and `post_checks`.
+- FOR CODE FIXES: Do NOT use `sed` or fragile text manipulation. Use the `file_edit` structure. Provide the `original_context` (exact code block to be replaced, 3-5 lines) and `replacement_text`. This ensures the fix is applied to the correct location even if line numbers shift.
+- FOR XML/POM FIXES: Use `fix_type="xml_block_edit"`. Provide `xml_selector` (e.g., "dependency", "plugin") and `xml_value` (e.g., artifactId) to safely remove entire blocks.
+- FOR RUNTIME ISSUES: Do NOT invent code fixes for ephemeral problems (e.g., OOM kills, spikes). Use `fix_type="runtime_remediation"` and suggest reversible actions like "restart pod", "clear cache", or "scale up".
 - Assess if the fix is safe for automated execution.
 - Return ONLY valid JSON in the specified format."""
 
@@ -50,14 +52,23 @@ Rules:
       "rank": "integer - priority (1 is highest)",
       "title": "string - short title",
       "description": "string - detailed description",
-      "fix_type": "string - e.g. kubernetes, sql, api",
+      "fix_type": "string - code_patch, config_change, runtime_remediation, preventive_recommendation",
       "estimated_effort": "string - low/medium/high",
       "estimated_time_minutes": "integer",
       "risk_level": "string - low/medium/high",
       "cost_impact": "string",
       "implementation": {
-        "type": "string - e.g. kubectl",
-        "commands": ["string array - exact commands"],
+        "type": "string - e.g. git_workflow, kubectl",
+        "commands": ["string array - shell commands"],
+        "file_edits": [
+          {
+            "file_path": "string - absolute path",
+            "original_context": "string - exact code block to be replaced (multi-line)",
+            "replacement_text": "string - replacement code block (multi-line)",
+            "xml_selector": "string - dependency or plugin (only for xml_block_edit)",
+            "xml_value": "string - artifactId to remove (only for xml_block_edit)"
+          }
+        ],
         "pre_checks": ["string array - safety checks"],
         "post_checks": ["string array - verification steps"]
       },
@@ -214,8 +225,16 @@ Your response (JSON only, no markdown, no explanation):"""
             "gitContext": {
                 "repo": bundle.git_context.repo_url if bundle.git_context else None,
                 "branch": bundle.git_context.branch if bundle.git_context else None,
-                "recentCommits": bundle.git_context.recent_commits if bundle.git_context else []
-            } if bundle.git_context else None,
+                "recentCommits": bundle.git_context.recent_commits if bundle.git_context else [],
+                "userConfig": {
+                    "name": bundle.git_config.user_name if bundle.git_config else None,
+                    "email": bundle.git_config.user_email if bundle.git_config else None
+                } if bundle.git_config else None,
+                "configFiles": {
+                    "local": bundle.git_config.local_config_content if bundle.git_config else None,
+                    "global": bundle.git_config.global_config_content if bundle.git_config else None
+                } if bundle.git_config else None
+            } if bundle.git_context or bundle.git_config else None,
             "codeSnippets": [
                 {
                     "file": s.file_path,

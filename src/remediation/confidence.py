@@ -66,7 +66,8 @@ class ConfidenceScorer:
     
     
     # Thresholds
-    HIGH_CONFIDENCE_THRESHOLD = 0.90
+    # Thresholds
+    HIGH_CONFIDENCE_THRESHOLD = 0.99
     LOW_CONFIDENCE_THRESHOLD = 0.80
     
     def __init__(self, feedback_store: FeedbackStore):
@@ -97,11 +98,25 @@ class ConfidenceScorer:
             final_score = raw_ai_confidence
             reason = f"AI Confidence ({raw_ai_confidence:.2f})"
 
-        # Rule: Low Confidence (< 0.8)
+        # Determine Threshold based on Action Type
+        # Runtime ops are generally reversible, so we can be a bit more lenient.
+        # Check if plan contains runtime ops
+        # Check if plan contains runtime ops
+        
+        # Better check:
+        from src.remediation.types import ActionType
+        has_runtime_op = any(a.type == ActionType.RUNTIME_OP for a in proposal.actions)
+        
+        current_threshold = self.LOW_CONFIDENCE_THRESHOLD
+        if has_runtime_op:
+            # Lower threshold for runtime ops (e.g. 0.70)
+            current_threshold = 0.70
+            
+        # Rule: Low Confidence 
         # Condition: New issue, no history, or past failures.
         # Result: Downgrade to HITL (Manual Review).
-        if final_score < self.LOW_CONFIDENCE_THRESHOLD:
-             return ConfidenceResult(final_score, SafetyLevel.REQUIRE_APPROVAL, "Low confidence (< 0.8). Forcing HITL.")
+        if final_score < current_threshold:
+             return ConfidenceResult(final_score, SafetyLevel.REQUIRE_APPROVAL, f"Low confidence (< {current_threshold}). Forcing HITL.")
              
         # Rule: High Confidence (> 0.9)
         # Condition: Similar past incidents verified by humans?

@@ -32,8 +32,13 @@ IDEAL_AI_RESPONSE = """
       "cost_impact": "None",
       "implementation": {
         "type": "git_workflow",
-        "commands": [
-          "sed -i 's/timeout=5/timeout=30/' src/config/database.py"
+        "commands": [],
+        "file_edits": [
+            {
+                "file_path": "src/config/database.py",
+                "original_context": "def get_conn():\\n    return connect(timeout=5)",
+                "replacement_text": "def get_conn():\\n    return connect(timeout=30)"
+            }
         ],
         "pre_checks": ["grep 'timeout=5' src/config/database.py"],
         "post_checks": ["grep 'timeout=30' src/config/database.py"]
@@ -86,7 +91,7 @@ async def test_code_fix_workflow():
     mock_ollama.health_check = AsyncMock(return_value={"status": "healthy"})
 
     # 4. Initialize Adapter
-    service = AIAdapterService(ollama_client=mock_ollama)
+    service = AIAdapterService(llm_client=mock_ollama)
     
     # Check that we can create a remediation proposal
     # NOTE: The RemediationAgent in `ai_adapter_service.py` currently uses `MockLLM` internally 
@@ -103,10 +108,11 @@ async def test_code_fix_workflow():
     print(f" -> Title: {first_rec.title}")
     print(f" -> Fix Type: {first_rec.fix_type}")
     print(f" -> Implementation Type: {first_rec.implementation.type}")
-    print(f" -> Commands: {first_rec.implementation.commands}")
+    print(f" -> File Edits: {first_rec.implementation.file_edits}")
     
-    assert first_rec.implementation.commands[0] == "sed -i 's/timeout=5/timeout=30/' src/config/database.py"
-    print("SUCCESS: Command matches expected 'sed' instruction.")
+    assert len(first_rec.implementation.file_edits) > 0
+    assert first_rec.implementation.file_edits[0].file_path == "src/config/database.py"
+    print("SUCCESS: Recommendation parsed correctly with FILE_EDIT.")
     
     # 6. Verify Context Usage
     # We can check that the prompt sent to the LLM actually contained our snippet.
@@ -128,6 +134,19 @@ async def test_code_fix_workflow():
     # Manually construct proposal from recommendation for testing
     # In real flow, AIAdapterService.create_remediation_proposal does this
     rec = recommendation.recommendations[0]
+    
+    # Map actions manually for test (simulating Adapter logic)
+    actions = []
+    if rec.implementation.file_edits:
+        for edit in rec.implementation.file_edits:
+            actions.append(RemediationAction(
+                type=ActionType.FILE_EDIT,
+                command=f"Edit {edit.file_path}",
+                file_path=edit.file_path,
+                original_context=edit.original_context,
+                replacement_text=edit.replacement_text
+            ))
+            
     proposal = RemediationProposal(
         plan=RemediationPlan(
             title=rec.title,
@@ -135,29 +154,36 @@ async def test_code_fix_workflow():
             validation_strategy="Post-execution health check",
             risk_assessment=rec.risk_level
         ),
-        actions=[
-            RemediationAction(
-                type=ActionType.COMMAND,
-                command=cmd
-            ) for cmd in rec.implementation.commands
-        ],
+        actions=actions,
         confidence_score=rec.ai_confidence
     )
     
     # Initialize Agent
     agent = RemediationAgent()
     
-    # Mock the internal execute method to avoid actual shell commands during test
-    agent._execute_actions = MagicMock(return_value=True)
-    
-    # Run Agent
-    # Forcing Safe level for test, or we ensure confidence is high enough
-    # The Mock response has 0.98 confidence which satisfies SAFE usually, 
-    # BUT SafetyPolicy defaults to REQUIRE_APPROVAL for unknown commands.
-    # We will see what happens.
-    result = agent.run(proposal)
-    
-    print(f" -> Agent Decision: {result.confidence_result.decision}")
+    # Mock CodePatcher.apply_patch to avoid actual filesystem writes during test
+    with patch('src.remediation.patcher.CodePatcher.apply_patch') as mock_patch:
+        # Mock successful patch
+        from src.remediation.patcher import PatchResult
+        mock_patch.return_value = PatchResult(True, "Mock Success")
+        
+        # Force SAFE decision
+        from src.remediation.confidence import ConfidenceResult
+        from src.remediation.safety import SafetyLevel
+        agent.confidence_engine.evaluate = MagicMock(return_value=ConfidenceResult(
+            decision=SafetyLevel.SAFE,
+            final_score=0.99,
+            reason="Forced Safe for Test"
+        ))
+
+        # Run Agent
+        result = agent.run(proposal)
+        
+        print(f" -> Agent Decision: {result.confidence_result.decision}")
+        
+        # Verify Patch was called
+        mock_patch.assert_called_once()
+        print("SUCCESS: CodePatcher.apply_patch was called.")
     
     # Emulate "Success" to trigger learning
     # Even if blocked, let's force executed=True to test the save_learning method

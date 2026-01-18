@@ -64,8 +64,8 @@ class AIAdapterService:
             provider = os.getenv("LLM_PROVIDER", "ollama")
             print(f"[AIAdapterService] Using LLM Provider: {provider}")
             self._llm_client = get_groq_client()
-         
-        
+
+
         # Metrics tracking
         self.metrics = {
             "total_requests": 0,
@@ -229,6 +229,8 @@ class AIAdapterService:
                 action_type = rt.ActionType.COMMAND
                 if top_rec.implementation.type == "git_workflow":
                     action_type = rt.ActionType.PATCH # Or new GIT_WORKFLOW type if added
+                elif top_rec.fix_type == "runtime_remediation":
+                    action_type = rt.ActionType.RUNTIME_OP
                 
                 for cmd in top_rec.implementation.commands:
                     actions.append(rt.RemediationAction(
@@ -236,6 +238,24 @@ class AIAdapterService:
                         command=cmd,
                         context="."
                     ))
+
+                # Handle robust File Edits (if provided and type is appropriate)
+                if top_rec.implementation.file_edits:
+                    for edit in top_rec.implementation.file_edits:
+                        # Determine efficient action type
+                        atype = rt.ActionType.FILE_EDIT
+                        if top_rec.fix_type == "xml_block_edit" or edit.xml_selector:
+                            atype = rt.ActionType.XML_EDIT
+                            
+                        actions.append(rt.RemediationAction(
+                            type=atype,
+                            command=f"Edit {edit.file_path}", # Description for logging
+                            file_path=edit.file_path,
+                            original_context=edit.original_context,
+                            replacement_text=edit.replacement_text,
+                            xml_selector=edit.xml_selector,
+                            xml_value=edit.xml_value
+                        ))
 
             proposal = RemediationProposal(
                 plan=rt.RemediationPlan(
@@ -245,7 +265,8 @@ class AIAdapterService:
                     risk_assessment=top_rec.risk_level
                 ),
                 actions=actions,
-                confidence_score=rec.confidence_assessment.final_confidence
+                confidence_score=rec.confidence_assessment.final_confidence,
+                git_config=bundle.git_config
             )
 
             # 2. Execute via Agent (Act)
