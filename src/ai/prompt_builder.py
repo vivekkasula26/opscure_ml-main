@@ -198,7 +198,7 @@ Your response (JSON only, no markdown, no explanation):"""
             "affectedServices": bundle.affectedServices,
             "logPatterns": [
                 {
-                    "pattern": p.pattern[:200],  # Truncate long patterns
+                    "pattern": p.pattern[:1000],  # Increased limit to capture full error details
                     "count": p.count,
                     "errorClass": p.errorClass
                 }

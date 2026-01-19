@@ -56,7 +56,7 @@ class Summarizer:
             sorted_patterns = sorted(bundle.logPatterns, key=lambda p: p.count, reverse=True)
             top_patterns = sorted_patterns[:3]
             for pattern in top_patterns:
-                parts.append(f"Log pattern ({pattern.count}x): {pattern.pattern[:100]}")
+                parts.append(f"Log pattern ({pattern.count}x): {pattern.pattern[:500]}")
         
         # Anomaly metrics
         anomalies = []
@@ -124,7 +124,7 @@ class Summarizer:
             lines.append("\nLog Patterns:")
             for pattern in bundle.logPatterns[:5]:
                 error_info = f" [{pattern.errorClass}]" if pattern.errorClass else ""
-                lines.append(f"  - ({pattern.count}x){error_info}: {pattern.pattern[:150]}")
+                lines.append(f"  - ({pattern.count}x){error_info}: {pattern.pattern[:1000]}")
         
         # Events
         if bundle.events:

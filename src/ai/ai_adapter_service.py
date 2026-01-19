@@ -62,7 +62,6 @@ class AIAdapterService:
         else:
             # Fallback for direct instantiation without factory
             provider = os.getenv("LLM_PROVIDER", "ollama")
-            print(f"[AIAdapterService] Using LLM Provider: {provider}")
             self._llm_client = get_groq_client()
 
 
@@ -356,7 +355,7 @@ async def get_ai_adapter_service() -> AIAdapterService:
     if _ai_adapter_service is None:
         provider = os.getenv("LLM_PROVIDER", "ollama")
         client = get_groq_client()
-        
+
             
         _ai_adapter_service = AIAdapterService(llm_client=client)
     
