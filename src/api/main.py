@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from src.common.types import CorrelationBundle, AIRecommendation
 from src.ai import get_ai_adapter_service, AIAdapterService
+from src.ingestion import get_log_parser_service
 from dotenv import load_dotenv
 
 
@@ -175,6 +176,92 @@ async def get_metrics():
     """Get AI service metrics"""
     service: AIAdapterService = app.state.ai_service
     return service.get_metrics()
+
+
+# =============================================================================
+# LOG INGESTION ENDPOINT
+# =============================================================================
+
+class IngestRequest(BaseModel):
+    """Request body for /ingest endpoint"""
+    raw_logs: str
+    service_name: Optional[str] = None
+    repo_root: Optional[str] = None
+
+
+class IngestResponse(BaseModel):
+    """Response body for /ingest endpoint"""
+    bundle: CorrelationBundle
+    pattern_count: int
+    error_count: int
+    time_window_seconds: Optional[float] = None
+
+
+@app.post("/ingest", response_model=IngestResponse)
+async def ingest_logs(request: IngestRequest):
+    """
+    Ingest raw logs and create a CorrelationBundle.
+    
+    This endpoint accepts raw log text (multi-line) and parses it into
+    a structured CorrelationBundle suitable for AI analysis.
+    
+    Flow:
+    1. Parse each log line (extract timestamp, severity)
+    2. Normalize patterns (deduplicate similar logs)
+    3. Extract code references from stack traces
+    4. Calculate time window and metrics
+    5. Return structured CorrelationBundle
+    """
+    parser = get_log_parser_service(repo_root=request.repo_root)
+    
+    try:
+        bundle = parser.parse_stream(
+            raw_logs=request.raw_logs,
+            service_name=request.service_name
+        )
+        
+        # Calculate stats
+        error_patterns = [p for p in bundle.logPatterns if p.errorClass in ['ERROR', 'FATAL', 'EXCEPTION']]
+        
+        return IngestResponse(
+            bundle=bundle,
+            pattern_count=len(bundle.logPatterns),
+            error_count=len(error_patterns)
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Log parsing failed: {str(e)}")
+
+
+@app.post("/ingest/analyze")
+async def ingest_and_analyze(request: IngestRequest):
+    """
+    Ingest raw logs AND immediately analyze them.
+    
+    Combines /ingest and /ai/analyze into a single call.
+    This is the recommended endpoint for end-to-end processing.
+    """
+    parser = get_log_parser_service(repo_root=request.repo_root)
+    service: AIAdapterService = app.state.ai_service
+    
+    try:
+        # Step 1: Parse logs into bundle
+        bundle = parser.parse_stream(
+            raw_logs=request.raw_logs,
+            service_name=request.service_name
+        )
+        
+        # Step 2: Analyze bundle with AI
+        recommendation = await service.analyze_bundle(bundle)
+        
+        return {
+            "bundle": bundle,
+            "recommendation": recommendation,
+            "pattern_count": len(bundle.logPatterns)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # =============================================================================

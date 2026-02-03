@@ -13,6 +13,15 @@ import uuid
 # CORRELATION BUNDLE (INPUT)
 # =============================================================================
 
+class LogSource(BaseModel):
+    """Source metadata for a log pattern - tracks which log file/type it came from"""
+    type: str  # "application" | "init" | "access" | "gc" | "system" | "audit"
+    file: Optional[str] = None  # Original file path
+    container: Optional[str] = None  # K8s container name
+    namespace: Optional[str] = None  # K8s namespace
+    node: Optional[str] = None  # K8s node / hostname
+
+
 class LogPattern(BaseModel):
     """Detected log pattern within the correlation window"""
     pattern: str
@@ -20,6 +29,7 @@ class LogPattern(BaseModel):
     firstOccurrence: str
     lastOccurrence: str
     errorClass: Optional[str] = None
+    logSource: Optional[LogSource] = None  # Track source (application, init, gc, etc.)
 
 
 class Event(BaseModel):

@@ -1,1 +1,1 @@
-{"Check Logs": {"success": 1, "total": 1}, "Test Git Config": {"success": 2, "total": 2}, "Increase DB Timeout": {"success": 4, "total": 4}, "Restart Payment Service Pod": {"success": 6, "total": 6}}
+{"Check Logs": {"success": 1, "total": 1}, "Test Git Config": {"success": 2, "total": 2}, "Increase DB Timeout": {"success": 6, "total": 6}, "Restart Payment Service Pod": {"success": 6, "total": 6}}

@@ -5,8 +5,9 @@ Constructs AI prompts from CorrelationBundle and retrieved incidents.
 
 import json
 from typing import List
-from src.common.types import CorrelationBundle, RetrievedIncident
+from src.common.types import CorrelationBundle, RetrievedIncident, LogPattern
 from src.ai.summarizer import Summarizer
+from src.ai.error_correlator import ErrorCorrelator
 
 
 class PromptBuilder:
@@ -196,14 +197,10 @@ Your response (JSON only, no markdown, no explanation):"""
             },
             "rootService": bundle.rootService,
             "affectedServices": bundle.affectedServices,
-            "logPatterns": [
-                {
-                    "pattern": p.pattern[:1000],  # Increased limit to capture full error details
-                    "count": p.count,
-                    "errorClass": p.errorClass
-                }
-                for p in bundle.logPatterns[:10]  # Limit to 10 patterns
-            ],
+            "errorCorrelation": cls._format_correlated_patterns(
+                bundle.logPatterns, 
+                bundle.dependencyGraph
+            ),
             "events": [
                 {
                     "type": e.type,
@@ -219,8 +216,17 @@ Your response (JSON only, no markdown, no explanation):"""
                 "latencyZ": bundle.metrics.latencyZ,
                 "errorRateZ": bundle.metrics.errorRateZ
             },
+
             "dependencyGraph": bundle.dependencyGraph,
-            "dependencyGraph": bundle.dependencyGraph,
+            "sequence": [
+                {
+                    "timestamp": s.timestamp,
+                    "type": s.type,
+                    "message": s.message[:200], # Truncate individual messages
+                    "idx": s.sequenceIndex
+                }
+                for s in bundle.sequence[:50] # Limit to 50 items to preserve context window
+            ],
             "derivedRootCauseHint": bundle.derivedRootCauseHint,
             "gitContext": {
                 "repo": bundle.git_context.repo_url if bundle.git_context else None,
@@ -300,6 +306,63 @@ Your response (JSON only, no markdown, no explanation):"""
             return obj
     
     @classmethod
+    def _format_correlated_patterns(
+        cls, 
+        patterns: List[LogPattern], 
+        dependency_graph: List[str]
+    ) -> dict:
+        """
+        Use ErrorCorrelator to group related errors and identify MULTIPLE root causes.
+        
+        Returns structured format for AI consumption with ranked root causes.
+        """
+        if not patterns:
+            return {"primaryCluster": None, "secondaryClusters": [], "unrelatedPatterns": []}
+        
+        # Run correlation
+        result = ErrorCorrelator.correlate(patterns, dependency_graph)
+        
+        def format_pattern(p) -> dict:
+            return {
+                "pattern": p.pattern[:500],
+                "count": p.count,
+                "errorClass": p.errorClass,
+                "firstOccurrence": p.firstOccurrence,
+                "logSource": {
+                    "type": p.logSource.type if p.logSource else None,
+                    "file": p.logSource.file if p.logSource else None
+                } if p.logSource else None
+            }
+        
+        def format_ranked_cause(rc) -> dict:
+            pattern = rc.pattern
+            return {
+                "rank": rc.rank,
+                "severity": rc.severity_score,
+                "pattern": pattern.pattern[:500],
+                "errorClass": pattern.errorClass,
+                "reason": rc.reason,
+                "logSource": pattern.logSource.type if pattern.logSource else None
+            }
+        
+        def format_cluster(cluster) -> dict:
+            # Include all ranked root causes
+            ranked_causes = [format_ranked_cause(rc) for rc in cluster.root_causes] if cluster.root_causes else []
+            
+            return {
+                "timestamp": cluster.timestamp,
+                "rootCauses": ranked_causes,  # Multiple ranked causes
+                "primaryRootCause": format_pattern(cluster.root_cause) if cluster.root_cause else None,  # Backward compat
+                "effects": [format_pattern(p) for p in cluster.effects[:5]]
+            }
+        
+        return {
+            "primaryCluster": format_cluster(result.primary_cluster) if result.primary_cluster else None,
+            "secondaryClusters": [format_cluster(c) for c in result.secondary_clusters[:3]],
+            "unrelatedPatterns": [format_pattern(p) for p in result.unrelated_patterns[:5]]
+        }
+    
+    @classmethod
     def build_simple_prompt(cls, bundle: CorrelationBundle) -> str:
         """
         Build a simple prompt without RAG context.
@@ -331,3 +394,63 @@ Return ONLY valid JSON:
 
 Your response (JSON only):"""
 
+    @classmethod
+    def _get_prioritized_patterns(cls, patterns: List[LogPattern], limit: int = 20) -> List[LogPattern]:
+        """
+        Sort and filter log patterns based on severity and count.
+        Prioritizes Critical/Fatal errors over noise.
+        
+        Args:
+            patterns: List of log patterns
+            limit: Maximum number of patterns to return
+            
+        Returns:
+            Sorted and filtered list of patterns
+        """
+        if not patterns:
+            return []
+            
+        # Sort by:
+        # 1. Severity (Higher is better)
+        # 2. Count (Higher is better)
+        # 3. Time (Later is better? Or just stable sort)
+        
+        # We need a stable sort key
+        def sort_key(p: LogPattern):
+            severity = cls._calculate_pattern_severity(p)
+            return (severity, p.count)
+            
+        # Sort descending
+        sorted_patterns = sorted(patterns, key=sort_key, reverse=True)
+        
+        return sorted_patterns[:limit]
+        
+    @classmethod
+    def _calculate_pattern_severity(cls, pattern: LogPattern) -> int:
+        """
+        Calculate severity score for a log pattern.
+        
+        Score mapping:
+        - 100: Critical, Fatal, Panic
+        - 80: Error, Exception, Fail
+        - 50: Warning, Warn
+        - 10: Info, Debug, Trace (Default)
+        
+        Args:
+            pattern: The log pattern to score
+            
+        Returns:
+            Integer severity score
+        """
+        text = pattern.pattern.lower()
+        if pattern.errorClass:
+            text += " " + pattern.errorClass.lower()
+            
+        if any(w in text for w in ["fatal", "panic", "critical", "emerg"]):
+            return 100
+        if any(w in text for w in ["error", "exception", "fail", "crash", "unhandled"]):
+            return 80
+        if any(w in text for w in ["warning", "warn"]):
+            return 50
+            
+        return 10

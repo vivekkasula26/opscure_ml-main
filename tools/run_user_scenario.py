@@ -36,7 +36,15 @@ USER_PAYLOAD = {
      "errorRateZ": 2
    },
    "dependencyGraph": [],
-   "derivedRootCauseHint": "Derived from runtime log patterns"
+   "derivedRootCauseHint": "Derived from runtime log patterns",
+   "sequence": [
+     {
+       "timestamp": "2026-01-15T07:21:58Z",
+       "type": "log",
+       "message": "[WARNING] 'build.plugins.plugin.(groupId:artifactId)' must be unique but found duplicate declaration of plugin org.springframework.boot:spring-boot-maven-plugin @ line 128, column 12",
+       "sequenceIndex": 1
+     }
+   ]
  },
  "use_rag": True,
  "top_k": 5

@@ -9,6 +9,7 @@ Orchestrates the Sense -> Think -> Act loop.
 
 from typing import Optional, List
 from dataclasses import dataclass
+import os
 
 from src.common.types import CorrelationBundle
 from src.common.types import CorrelationBundle, GitConfig
@@ -67,10 +68,6 @@ class RemediationAgent:
             executed = True
             
             # Record feedback loop
-            # Using plan title as signature
-            self.feedback_store.record_feedback(proposal.plan.title, success)
-            # Record feedback loop
-            # Using plan title as signature
             self.feedback_store.record_feedback(proposal.plan.title, success)
             logs.append(f"Recorded feedback for '{proposal.plan.title}': Success={success}")
             

@@ -62,9 +62,11 @@ class AIAdapterService:
         else:
             # Fallback for direct instantiation without factory
             provider = os.getenv("LLM_PROVIDER", "ollama")
-            self._llm_client = get_groq_client()
-
-
+            if provider == "groq":
+                self._llm_client = get_groq_client()
+            else:
+                self._llm_client = get_ollama_client()
+        
         # Metrics tracking
         self.metrics = {
             "total_requests": 0,
@@ -274,6 +276,14 @@ class AIAdapterService:
             # Log the decision
             print(f"[AIAdapterService] Remediation Decision: {result.confidence_result.decision}")
             
+            # Store successful fixes in Pinecone for future RAG
+            if result.executed:
+                try:
+                    await result.save_learning()
+                    print(f"[AIAdapterService] Stored successful fix in knowledge base")
+                except Exception as e:
+                    print(f"[AIAdapterService] Failed to save learning: {e}")
+            
             return result.proposal
             
         except Exception as e:
@@ -354,8 +364,10 @@ async def get_ai_adapter_service() -> AIAdapterService:
     
     if _ai_adapter_service is None:
         provider = os.getenv("LLM_PROVIDER", "ollama")
-        client = get_groq_client()
-
+        if provider == "groq":
+            client = get_groq_client()
+        else:
+            client = get_ollama_client()
             
         _ai_adapter_service = AIAdapterService(llm_client=client)
     

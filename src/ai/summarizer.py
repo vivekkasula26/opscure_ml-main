@@ -14,7 +14,7 @@ class Summarizer:
     """
     
     @staticmethod
-    def summarize_bundle(bundle: CorrelationBundle) -> str:
+    def summarize_bundle(bundle: CorrelationBundle, top_k: int = 3) -> str:
         """
         Build a short summary from CorrelationBundle.
         
@@ -51,10 +51,19 @@ class Summarizer:
             classes = ", ".join(list(error_classes)[:5])
             parts.append(f"Error classes: {classes}")
         
-        # Top log patterns by count
+        # Top log patterns by severity then count
         if bundle.logPatterns:
-            sorted_patterns = sorted(bundle.logPatterns, key=lambda p: p.count, reverse=True)
-            top_patterns = sorted_patterns[:3]
+            # Sort by severity then count
+            def sort_key(p):
+                score = 10
+                text = p.pattern.lower() + ((" " + p.errorClass.lower()) if p.errorClass else "")
+                if any(w in text for w in ["fatal", "panic", "critical"]): score = 100
+                elif any(w in text for w in ["error", "exception", "fail"]): score = 80
+                elif any(w in text for w in ["warning", "warn"]): score = 50
+                return (score, p.count)
+
+            sorted_patterns = sorted(bundle.logPatterns, key=sort_key, reverse=True)
+            top_patterns = sorted_patterns[:top_k]
             for pattern in top_patterns:
                 parts.append(f"Log pattern ({pattern.count}x): {pattern.pattern[:500]}")
         
