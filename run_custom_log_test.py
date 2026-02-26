@@ -17,7 +17,7 @@ def create_bundle_from_logs():
         "service": "auth-service",
         "pod": "auth-service-7d8f9b6c4-xkj9m",
         "message": "NullPointerException: Cannot invoke 'User.getProfile()' because 'user' is null",
-        "errorClass": "NullPointerException"
+        "severity": "NullPointerException"
       },
       {
         "timestamp": "2024-12-04T10:30:17.456Z",
@@ -25,7 +25,7 @@ def create_bundle_from_logs():
         "service": "api-gateway",
         "pod": "api-gateway-5c7d8f9b-plm2n",
         "message": "Authentication service timeout after 5000ms",
-        "errorClass": "TimeoutError"
+        "severity": "TimeoutError"
       },
       {
         "timestamp": "2024-12-04T10:30:20.789Z",
@@ -33,7 +33,7 @@ def create_bundle_from_logs():
         "service": "frontend",
         "pod": "frontend-web-6f8c9d7-qrs3p",
         "message": "User authentication failed: Gateway timeout",
-        "errorClass": "AuthenticationError"
+        "severity": "AuthenticationError"
       },
       {
         "timestamp": "2024-12-04T10:31:05.234Z",
@@ -41,7 +41,7 @@ def create_bundle_from_logs():
         "service": "payment-service",
         "pod": "payment-service-8e9f0a1-tuv4q",
         "message": "Database connection pool exhausted",
-        "errorClass": "ConnectionPoolExhaustedException"
+        "severity": "ConnectionPoolExhaustedException"
       },
       {
         "timestamp": "2024-12-04T10:32:15.567Z",
@@ -49,7 +49,7 @@ def create_bundle_from_logs():
         "service": "order-service",
         "pod": "order-service-9f0a1b2-wxy5r",
         "message": "Out of memory error",
-        "errorClass": "OutOfMemoryError"
+        "severity": "OutOfMemoryError"
       }
     ]
 
@@ -61,7 +61,7 @@ def create_bundle_from_logs():
             "count": 1,
             "firstOccurrence": log["timestamp"],
             "lastOccurrence": log["timestamp"],
-            "errorClass": log.get("errorClass")
+            "severity": log.get("severity")
         })
 
     # 3. Map to SequenceItems

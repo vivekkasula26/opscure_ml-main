@@ -51,18 +51,18 @@ def main():
     severity_order = {'FATAL': 0, 'ERROR': 1, 'EXCEPTION': 2, 'WARN': 3, 'WARNING': 4, 'INFO': 5, 'DEBUG': 6, None: 7}
     sorted_patterns = sorted(
         bundle.logPatterns, 
-        key=lambda p: (severity_order.get(p.errorClass, 7), -p.count)
+        key=lambda p: (severity_order.get(p.severity, 7), -p.count)
     )
     
     for idx, pattern in enumerate(sorted_patterns[:10], 1):
-        severity_tag = f"[{pattern.errorClass}]" if pattern.errorClass else "[NONE]"
+        severity_tag = f"[{pattern.severity}]" if pattern.severity else "[NONE]"
         print(f"   {idx}. {severity_tag} (x{pattern.count}) {pattern.pattern[:80]}...")
     
     # Validate Smart Sorting integration
     print(f"\n✅ VALIDATION:")
-    error_count = sum(1 for p in bundle.logPatterns if p.errorClass in ['ERROR', 'FATAL'])
-    warn_count = sum(1 for p in bundle.logPatterns if p.errorClass in ['WARN', 'WARNING'])
-    debug_count = sum(1 for p in bundle.logPatterns if p.errorClass == 'DEBUG')
+    error_count = sum(1 for p in bundle.logPatterns if p.severity in ['ERROR', 'FATAL'])
+    warn_count = sum(1 for p in bundle.logPatterns if p.severity in ['WARN', 'WARNING'])
+    debug_count = sum(1 for p in bundle.logPatterns if p.severity == 'DEBUG')
     
     print(f"   Errors extracted: {error_count}")
     print(f"   Warnings extracted: {warn_count}")

@@ -18,14 +18,33 @@ class PromptBuilder:
     
     SYSTEM_PROMPT = """You are an SRE expert AI. You analyze incidents using logs, metrics, events, and prior historical examples.
 
-Rules:
+Your end users are DEVELOPERS working locally. You will receive git context and working-directory information in the bundle — use this to understand what changed and where the issue originates.
+
+## Fix Scope — LOCAL APPLICATION CODE ONLY
+Your fixes must be changes the developer can make DIRECTLY in their local source code or config files.
+
+ALLOWED fix types:
+- Editing source code files (add retry logic, error handling, guards, backoff)
+- Editing local config files (application.yml, .env, pom.xml, build.gradle)
+- Running local build/run commands
+- Adjusting local environment variables already used by the app
+
+NEVER suggest:
+- External service configuration (e.g. "create a GitHub PAT", "configure AWS credentials", "update DNS", "contact the API provider")
+- git operations (git commit, git push, PR creation)
+- Infrastructure changes (scaling, firewall rules, load balancer config)
+- Anything that requires leaving the local working directory
+
+If the root cause is an external service rate limit or auth failure, the fix must be in the LOCAL CODE — e.g. add retry/backoff, add a circuit breaker, add a rate-limit guard, or add defensive error handling around the external call. Do NOT tell the developer to fix the external service.
+
+## Other Rules
 - Never hallucinate. Only use provided data.
 - Be precise about root cause identification.
-- Recommend specific, actionable fixes.
-- FOR CODE FIXES: Do NOT use `sed` or fragile text manipulation. Use the `file_edit` structure. Provide the `original_context` (exact code block to be replaced, 3-5 lines) and `replacement_text`. This ensures the fix is applied to the correct location even if line numbers shift.
-- FOR XML/POM FIXES: Use `fix_type="xml_block_edit"`. Provide `xml_selector` (e.g., "dependency", "plugin") and `xml_value` (e.g., artifactId) to safely remove entire blocks.
-- FOR RUNTIME ISSUES: Do NOT invent code fixes for ephemeral problems (e.g., OOM kills, spikes). Use `fix_type="runtime_remediation"` and suggest reversible actions like "restart pod", "clear cache", or "scale up".
-- Assess if the fix is safe for automated execution.
+- ALWAYS provide at least one recommendation — even if no code snippets are available. Use the class/method name from the stack trace to describe the fix location precisely.
+- FOR CODE FIXES: Use the `file_edit` structure. Provide `original_context` (exact code block to replace, 3-5 lines) and `replacement_text`. If no code snippets available, infer `file_path` from the stack trace class name (e.g. `src/main/java/com/beko/controllers/SimulateAPIQuota.java`).
+- FOR XML/POM FIXES: Use `fix_type="xml_block_edit"`. Provide `xml_selector` and `xml_value`.
+- FOR CONFIG FIXES: Use `fix_type="config_change"`. Reference the exact local config file.
+- FOR RUNTIME ISSUES: Use `fix_type="runtime_remediation"`. Suggest reversible local actions only.
 - Return ONLY valid JSON in the specified format."""
 
     OUTPUT_SCHEMA = """{
@@ -59,7 +78,7 @@ Rules:
       "risk_level": "string - low/medium/high",
       "cost_impact": "string",
       "implementation": {
-        "type": "string - e.g. git_workflow, kubectl",
+        "type": "string - e.g. local_file_edit, local_config, local_command, runtime_remediation",
         "commands": ["string array - shell commands"],
         "file_edits": [
           {
@@ -228,6 +247,8 @@ Your response (JSON only, no markdown, no explanation):"""
                 for s in bundle.sequence[:50] # Limit to 50 items to preserve context window
             ],
             "derivedRootCauseHint": bundle.derivedRootCauseHint,
+            # Why this bundle was flushed — tells AI whether this was a real error trigger
+            "triggerReason": bundle.flush_metadata.reason if bundle.flush_metadata else None,
             "gitContext": {
                 "repo": bundle.git_context.repo_url if bundle.git_context else None,
                 "branch": bundle.git_context.branch if bundle.git_context else None,
@@ -324,9 +345,11 @@ Your response (JSON only, no markdown, no explanation):"""
         
         def format_pattern(p) -> dict:
             return {
-                "pattern": p.pattern[:500],
+                "pattern": p.pattern[:3000],  # Full stack trace — was 500, truncated too early
                 "count": p.count,
-                "errorClass": p.errorClass,
+                "severity": p.severity,
+                "rootService": p.rootService,
+                "affectedService": p.affectedService,
                 "firstOccurrence": p.firstOccurrence,
                 "logSource": {
                     "type": p.logSource.type if p.logSource else None,
@@ -338,9 +361,10 @@ Your response (JSON only, no markdown, no explanation):"""
             pattern = rc.pattern
             return {
                 "rank": rc.rank,
-                "severity": rc.severity_score,
-                "pattern": pattern.pattern[:500],
-                "errorClass": pattern.errorClass,
+                "pattern": pattern.pattern[:3000],  # Full stack trace — was 500
+                "severity": pattern.severity,
+                "rootService": pattern.rootService,
+                "affectedService": pattern.affectedService,
                 "reason": rc.reason,
                 "logSource": pattern.logSource.type if pattern.logSource else None
             }
@@ -443,8 +467,8 @@ Your response (JSON only):"""
             Integer severity score
         """
         text = pattern.pattern.lower()
-        if pattern.errorClass:
-            text += " " + pattern.errorClass.lower()
+        if pattern.severity:
+            text += " " + pattern.severity.lower()
             
         if any(w in text for w in ["fatal", "panic", "critical", "emerg"]):
             return 100

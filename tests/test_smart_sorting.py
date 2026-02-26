@@ -26,7 +26,7 @@ class TestSmartSorting(unittest.TestCase):
             count=1,
             firstOccurrence="2025-01-01T12:01:00Z",
             lastOccurrence="2025-01-01T12:01:00Z",
-            errorClass="ConnectionRefusedError" 
+            severity="ConnectionRefusedError" 
         )
         patterns.append(fatal_pattern)
         

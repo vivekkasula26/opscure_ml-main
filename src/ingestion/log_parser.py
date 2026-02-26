@@ -246,7 +246,7 @@ class LogParserService:
                     count=1,
                     firstOccurrence=parsed.timestamp or "",
                     lastOccurrence=parsed.timestamp or "",
-                    errorClass=parsed.severity
+                    severity=parsed.severity
                 )
             else:
                 p = pattern_map[key]
@@ -320,7 +320,7 @@ class LogParserService:
     def _derive_hint(self, patterns: List[LogPattern]) -> Optional[str]:
         """Derive a root cause hint from the patterns"""
         # Count error types
-        error_patterns = [p for p in patterns if p.errorClass in ['ERROR', 'FATAL', 'EXCEPTION']]
+        error_patterns = [p for p in patterns if p.severity in ['ERROR', 'FATAL', 'EXCEPTION']]
         
         if not error_patterns:
             return None

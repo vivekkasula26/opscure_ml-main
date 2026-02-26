@@ -31,7 +31,7 @@ IDEAL_AI_RESPONSE = """
       "risk_level": "Medium",
       "cost_impact": "None",
       "implementation": {
-        "type": "git_workflow",
+        "type": "local_file_edit",
         "commands": [],
         "file_edits": [
             {

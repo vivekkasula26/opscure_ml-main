@@ -26,7 +26,7 @@ USER_PAYLOAD = {
        "count": 1,
        "firstOccurrence": "2026-01-15T07:21:58Z",
        "lastOccurrence": "2026-01-15T07:21:58Z",
-       "errorClass": "Warning"
+       "severity": "Warning"
      }
    ],
    "events": [],

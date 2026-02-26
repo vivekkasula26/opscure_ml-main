@@ -44,8 +44,8 @@ class Summarizer:
         # Error classes from log patterns
         error_classes = set()
         for pattern in bundle.logPatterns:
-            if pattern.errorClass:
-                error_classes.add(pattern.errorClass)
+            if pattern.severity:
+                error_classes.add(pattern.severity)
         
         if error_classes:
             classes = ", ".join(list(error_classes)[:5])
@@ -56,7 +56,7 @@ class Summarizer:
             # Sort by severity then count
             def sort_key(p):
                 score = 10
-                text = p.pattern.lower() + ((" " + p.errorClass.lower()) if p.errorClass else "")
+                text = p.pattern.lower() + ((" " + p.severity.lower()) if p.severity else "")
                 if any(w in text for w in ["fatal", "panic", "critical"]): score = 100
                 elif any(w in text for w in ["error", "exception", "fail"]): score = 80
                 elif any(w in text for w in ["warning", "warn"]): score = 50
@@ -132,7 +132,7 @@ class Summarizer:
         if bundle.logPatterns:
             lines.append("\nLog Patterns:")
             for pattern in bundle.logPatterns[:5]:
-                error_info = f" [{pattern.errorClass}]" if pattern.errorClass else ""
+                error_info = f" [{pattern.severity}]" if pattern.severity else ""
                 lines.append(f"  - ({pattern.count}x){error_info}: {pattern.pattern[:1000]}")
         
         # Events

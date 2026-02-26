@@ -49,21 +49,21 @@ def run_demo():
             count=5, 
             firstOccurrence="2026-01-19T07:42:58.612Z", 
             lastOccurrence="2026-01-19T07:42:58.612Z",
-            errorClass="404_NOT_FOUND"
+            severity="404_NOT_FOUND"
         ),
         LogPattern(
             pattern="[WARN] o.s.web.servlet.PageNotFound : No mapping for GET /dbpool/LoadSimulationService",
             count=3,
             firstOccurrence="2026-01-19T07:42:58.603Z",
             lastOccurrence="2026-01-19T07:42:58.603Z",
-            errorClass="PageNotFound"
+            severity="PageNotFound"
         ),
         LogPattern(
             pattern="[WARN] 'build.plugins.plugin.(groupId:artifactId)' must be unique but found duplicate",
             count=1,
             firstOccurrence="2026-01-19T07:42:27.313Z",
             lastOccurrence="2026-01-19T07:42:27.313Z",
-            errorClass="MavenBuildWarning"
+            severity="MavenBuildWarning"
         )
     ]
     

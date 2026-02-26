@@ -3,8 +3,8 @@ Core Domain Types for Opscure AI Pipeline
 Types for CorrelationBundle → AIRecommendation flow
 """
 
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any, Union
+from pydantic import BaseModel, Field, AliasChoices, field_validator
 from datetime import datetime
 import uuid
 
@@ -15,7 +15,7 @@ import uuid
 
 class LogSource(BaseModel):
     """Source metadata for a log pattern - tracks which log file/type it came from"""
-    type: str  # "application" | "init" | "access" | "gc" | "system" | "audit"
+    type: Optional[str] = None  # "application" | "init" | "access" | "gc" | "system" | "audit"
     file: Optional[str] = None  # Original file path
     container: Optional[str] = None  # K8s container name
     namespace: Optional[str] = None  # K8s namespace
@@ -26,9 +26,11 @@ class LogPattern(BaseModel):
     """Detected log pattern within the correlation window"""
     pattern: str
     count: int
-    firstOccurrence: str
-    lastOccurrence: str
-    errorClass: Optional[str] = None
+    firstOccurrence: Optional[str] = None
+    lastOccurrence: Optional[str] = None
+    severity: Optional[str] = None
+    rootService: Optional[str] = None      # Root cause service for this pattern
+    affectedService: Optional[Union[str, List[str]]] = None  # Service(s) that emitted this log
     logSource: Optional[LogSource] = None  # Track source (application, init, gc, etc.)
 
 
@@ -59,11 +61,20 @@ class SequenceItem(BaseModel):
     sequenceIndex: int
 
 
+class FlushMetadata(BaseModel):
+    """Metadata about why and when the bundle was flushed from the log stream"""
+    reason: str          # "error_detected" | "time_window_expired" | "manual"
+    log_count: int       # Total raw log lines in the flush window
+    flushed_at: str      # ISO-8601 timestamp when the flush occurred
+
+
 class CorrelationBundle(BaseModel):
     """
     Complete correlation bundle representing a grouped incident.
     This is the INPUT to the AI pipeline.
     """
+    model_config = {"populate_by_name": True}
+
     id: str = Field(default_factory=lambda: f"corr_{uuid.uuid4().hex[:12]}")
     windowStart: str
     windowEnd: str
@@ -76,13 +87,26 @@ class CorrelationBundle(BaseModel):
     
     dependencyGraph: List[str] = Field(default_factory=list)
     sequence: List[SequenceItem] = Field(default_factory=list)
-    
+
     derivedRootCauseHint: Optional[str] = None
-    
+    flush_metadata: Optional["FlushMetadata"] = None  # Why/when this bundle was flushed
+
     # Git Context
     git_context: Optional["GitContext"] = None
     code_snippets: List["CodeSnippet"] = Field(default_factory=list)
-    git_config: Optional["GitConfig"] = None
+    # 'gitConfig' is accepted as alias to match dev bundle camelCase format
+    git_config: Optional["GitConfig"] = Field(
+        default=None,
+        validation_alias=AliasChoices('git_config', 'gitConfig')
+    )
+
+    @field_validator('git_config', mode='before')
+    @classmethod
+    def _coerce_empty_git_config(cls, v):
+        """Treat gitConfig: {} (empty dict) from dev SDK as None — GitConfig requires user_name/user_email."""
+        if isinstance(v, dict) and not v:
+            return None
+        return v
 
 
 class GitContext(BaseModel):
@@ -91,6 +115,8 @@ class GitContext(BaseModel):
     branch: str
     commit_hash: str
     recent_commits: List[str] = Field(default_factory=list)
+    changed_files: List[str] = Field(default_factory=list)  # Files changed in last commit
+    diff: Optional[str] = None                              # Unified diff of last commit (truncated at 50KB)
 
 
 class CodeSnippet(BaseModel):
@@ -145,7 +171,7 @@ class FileEdit(BaseModel):
 
 class ImplementationDetails(BaseModel):
     """Detailed implementation steps for a fix"""
-    type: str  # e.g., "kubectl", "sql", "api", "git_workflow"
+    type: str  # e.g., "local_file_edit", "local_config", "local_command", "runtime_remediation"
     commands: List[str] = Field(default_factory=list)
     file_edits: List[FileEdit] = Field(default_factory=list)
     pre_checks: List[str] = Field(default_factory=list)

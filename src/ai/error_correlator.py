@@ -301,8 +301,8 @@ class ErrorCorrelator:
             return 0
         
         text = pattern.pattern.lower()
-        if pattern.errorClass:
-            text += " " + pattern.errorClass.lower()
+        if pattern.severity:
+            text += " " + pattern.severity.lower()
         
         if any(w in text for w in ["fatal", "panic", "critical", "emerg"]):
             return 100

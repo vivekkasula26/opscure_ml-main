@@ -23,56 +23,56 @@ BUNDLE_DATA = {
             "count": 1,
             "firstOccurrence": "2026-01-15T07:21:58Z",
             "lastOccurrence": "2026-01-15T07:21:58Z",
-            "errorClass": "Warning"
+            "severity": "Warning"
         },
         {
             "pattern": "HikariPool-1 - Starting...",
             "count": 1,
             "firstOccurrence": "2026-01-15T12:51:58Z",
             "lastOccurrence": "2026-01-15T12:51:58Z",
-            "errorClass": None
+            "severity": None
         },
         {
             "pattern": "HikariPool-1 - Start completed.",
             "count": 1,
             "firstOccurrence": "2026-01-15T12:51:58Z",
             "lastOccurrence": "2026-01-15T12:51:58Z",
-            "errorClass": None
+            "severity": None
         },
         {
             "pattern": "Starting DemoBankV1Application using Java 21.0.6",
             "count": 1,
             "firstOccurrence": "2026-01-15T12:51:53Z",
             "lastOccurrence": "2026-01-15T12:51:53Z",
-            "errorClass": None
+            "severity": None
         },
         {
             "pattern": "Root WebApplicationContext: initialization completed in 3523 ms",
             "count": 1,
             "firstOccurrence": "2026-01-15T12:51:57Z",
             "lastOccurrence": "2026-01-15T12:51:57Z",
-            "errorClass": None
+            "severity": None
         },
         {
             "pattern": "HHH000412: Hibernate ORM core version 5.6.15.Final",
             "count": 1,
             "firstOccurrence": "2026-01-15T12:51:57Z",
             "lastOccurrence": "2026-01-15T12:51:57Z",
-            "errorClass": None
+            "severity": None
         },
         {
             "pattern": "Tomcat initialized with port(s): 8070 (http)",
             "count": 1,
             "firstOccurrence": "2026-01-15T12:51:56Z",
             "lastOccurrence": "2026-01-15T12:51:56Z",
-            "errorClass": None
+            "severity": None
         },
         {
             "pattern": "jdbcUrl: jdbc:mysql://localhost:3306/demo_bank_v1",
             "count": 1,
             "firstOccurrence": "2026-01-15T12:51:58Z",
             "lastOccurrence": "2026-01-15T12:51:58Z",
-            "errorClass": None  
+            "severity": None  
         }
     ],
     "metrics": {
@@ -100,7 +100,7 @@ async def process_bundle():
             count=p["count"],
             firstOccurrence=p["firstOccurrence"],
             lastOccurrence=p["lastOccurrence"],
-            errorClass=p.get("errorClass")
+            severity=p.get("severity")
         )
         for p in BUNDLE_DATA["logPatterns"]
     ]
@@ -131,7 +131,7 @@ async def process_bundle():
     if correlation.primary_cluster and correlation.primary_cluster.root_cause:
         root = correlation.primary_cluster.root_cause
         print(f"   🎯 ROOT CAUSE IDENTIFIED:")
-        print(f"      Type: {root.errorClass}")
+        print(f"      Type: {root.severity}")
         print(f"      Pattern: {root.pattern[:80]}...")
         print(f"      Time: {root.firstOccurrence}")
         

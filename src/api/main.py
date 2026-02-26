@@ -14,6 +14,8 @@ from pydantic import BaseModel
 from src.common.types import CorrelationBundle, AIRecommendation
 from src.ai import get_ai_adapter_service, AIAdapterService
 from src.ingestion import get_log_parser_service
+from src.api.response_types import IncidentResponse
+from src.api.response_mapper import ResponseMapper
 from dotenv import load_dotenv
 
 
@@ -69,13 +71,6 @@ class AnalyzeRequest(BaseModel):
     top_k: int = 5
 
 
-class AnalyzeResponse(BaseModel):
-    """Response body for /ai/analyze endpoint"""
-    recommendation: AIRecommendation
-    model_used: Optional[str] = None
-    latency_ms: Optional[float] = None
-
-
 # =============================================================================
 # ENDPOINTS
 # =============================================================================
@@ -103,70 +98,57 @@ async def readiness_check():
     }
 
 
-@app.post("/ai/analyze", response_model=AnalyzeResponse)
+@app.post("/ai/analyze", response_model=IncidentResponse)
 async def analyze_correlation_bundle(request: AnalyzeRequest):
     """
-    Analyze a CorrelationBundle and return AI recommendation.
-    
-    This is the main endpoint for the AI pipeline.
-    
+    Analyze a CorrelationBundle and return a developer-facing IncidentResponse.
+
     Flow:
     1. Summarize bundle for embedding
     2. Query Pinecone for similar incidents (RAG)
     3. Build prompt with context
-    4. Call Ollama with fallback logic
-    5. Parse and return recommendation
+    4. Call LLM with fallback logic
+    5. Parse model output into AIRecommendation
+    6. Map AIRecommendation → IncidentResponse (developer contract)
     """
-    start_time = datetime.utcnow()
-    
     service: AIAdapterService = app.state.ai_service
-    
+
     try:
         recommendation = await service.create_ai_recommendation(
             bundle=request.bundle,
             use_rag=request.use_rag,
             top_k=request.top_k
         )
-        
-        latency_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
-        
-        return AnalyzeResponse(
-            recommendation=recommendation,
-            latency_ms=round(latency_ms, 2)
-        )
-        
+        return ResponseMapper.map(recommendation, request.bundle)
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/ai/analyze/simple")
+@app.post("/ai/analyze/simple", response_model=IncidentResponse)
 async def analyze_bundle_simple(bundle: CorrelationBundle):
     """
-    Simplified endpoint that just takes a CorrelationBundle directly.
+    Simplified endpoint — takes a CorrelationBundle directly.
     Uses default settings (RAG enabled, top_k=5).
     """
     service: AIAdapterService = app.state.ai_service
-    
     try:
         recommendation = await service.analyze_bundle(bundle)
-        return recommendation
-        
+        return ResponseMapper.map(recommendation, bundle)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/ai/analyze/no-rag")
+@app.post("/ai/analyze/no-rag", response_model=IncidentResponse)
 async def analyze_without_rag(bundle: CorrelationBundle):
     """
     Analyze bundle without RAG context.
     Useful for testing or when Pinecone is unavailable.
     """
     service: AIAdapterService = app.state.ai_service
-    
     try:
         recommendation = await service.analyze_without_rag(bundle)
-        return recommendation
-        
+        return ResponseMapper.map(recommendation, bundle)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -221,7 +203,7 @@ async def ingest_logs(request: IngestRequest):
         )
         
         # Calculate stats
-        error_patterns = [p for p in bundle.logPatterns if p.errorClass in ['ERROR', 'FATAL', 'EXCEPTION']]
+        error_patterns = [p for p in bundle.logPatterns if p.severity in ['ERROR', 'FATAL', 'EXCEPTION']]
         
         return IngestResponse(
             bundle=bundle,
@@ -288,14 +270,14 @@ async def get_example_bundle():
                 count=47,
                 firstOccurrence="2024-12-04T10:30:15Z",
                 lastOccurrence="2024-12-04T10:34:58Z",
-                errorClass="ConnectionPoolError"
+                severity="ConnectionPoolError"
             ),
             LogPattern(
                 pattern="WARN: Query timeout after 30000ms",
                 count=23,
                 firstOccurrence="2024-12-04T10:30:20Z",
                 lastOccurrence="2024-12-04T10:34:45Z",
-                errorClass="QueryTimeout"
+                severity="QueryTimeout"
             )
         ],
         events=[

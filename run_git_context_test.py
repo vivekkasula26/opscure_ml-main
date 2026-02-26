@@ -21,7 +21,7 @@ def create_git_bundle():
                 "count": 15,
                 "firstOccurrence": "2024-12-05T10:15:00Z",
                 "lastOccurrence": "2024-12-05T10:45:00Z",
-                "errorClass": "OutOfMemoryError"
+                "severity": "OutOfMemoryError"
             }
         ],
         "events": [],

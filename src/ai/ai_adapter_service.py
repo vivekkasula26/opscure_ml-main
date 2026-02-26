@@ -135,14 +135,21 @@ class AIAdapterService:
             
             # Step 5: Parse model output
             recommendation = AIOutputParser.parse(raw_output, bundle.id)
-            
+
+            # Stamp audit metadata so ResponseMapper can surface it
+            recommendation.metadata["model_used"] = model_used
+            recommendation.metadata["rag_incidents_used"] = len(similar_incidents)
+            recommendation.processing_time_ms = (
+                datetime.utcnow() - start_time
+            ).total_seconds() * 1000
+
             # Validate the recommendation
             issues = AIOutputParser.validate_recommendation(recommendation)
             if issues:
                 print(f"[AIAdapterService] Validation issues: {issues}")
-            
+
             # Track metrics
-            latency_ms = (datetime.utcnow() - start_time).total_seconds() * 1000
+            latency_ms = recommendation.processing_time_ms
             self._update_metrics(latency_ms, model_used != "degraded")
             
             print(f"[AIAdapterService] Completed in {latency_ms:.0f}ms, confidence: {recommendation.confidence_assessment.final_confidence}")
@@ -228,8 +235,8 @@ class AIAdapterService:
                 
                 # Check implementation type
                 action_type = rt.ActionType.COMMAND
-                if top_rec.implementation.type == "git_workflow":
-                    action_type = rt.ActionType.PATCH # Or new GIT_WORKFLOW type if added
+                if top_rec.implementation.type in ("local_file_edit", "local_config"):
+                    action_type = rt.ActionType.FILE_EDIT
                 elif top_rec.fix_type == "runtime_remediation":
                     action_type = rt.ActionType.RUNTIME_OP
                 
